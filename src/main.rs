@@ -96,10 +96,23 @@ async fn nearby(Query(params): Query<Params>) -> String {
 
     let station = fetch_nearby(lat, lon).await.unwrap();
 
+    let lines = station
+        .lines
+        .iter()
+        .map(|l| match params.en {
+            Some(true) => l.name_roman.clone().unwrap_or("".to_string()),
+            _ => l.name_short.clone(),
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+
     match params.en {
-        Some(true) => station.name_roman.unwrap_or("".to_string()),
-        Some(false) => station.name,
-        None => station.name,
+        Some(true) => format!(
+            "{}\n{}",
+            station.name_roman.unwrap_or("".to_string()),
+            lines
+        ),
+        _ => format!("{}\n{}", station.name, lines),
     }
 }
 

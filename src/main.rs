@@ -1,3 +1,8 @@
+use std::{
+    env::{self, VarError},
+    net::{AddrParseError, SocketAddr},
+};
+
 use axum::{extract::Query, routing::get, Router};
 use hyper_tls::HttpsConnector;
 use serde::Deserialize;
@@ -23,8 +28,9 @@ async fn main() {
     tracing_subscriber::fmt::init();
     dotenv::from_filename(".env.local").ok();
 
+    let addr = fetch_addr().unwrap();
     let app = Router::new().route("/nearby", get(nearby));
-    axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())
+    axum::Server::bind(&addr)
         .serve(app.into_make_service())
         .await
         .unwrap();
@@ -54,6 +60,30 @@ async fn fetch_nearby(
     let response = client.get_stations_by_coordinates(request).await?;
 
     Ok(response.into_inner().stations[0].clone())
+}
+
+fn fetch_port() -> u16 {
+    match env::var("PORT") {
+        Ok(s) => s.parse().expect("Failed to parse $PORT"),
+        Err(env::VarError::NotPresent) => {
+            println!("$PORT is not set. Falling back to 3000.");
+            3000
+        }
+        Err(VarError::NotUnicode(_)) => panic!("$PORT should be written in Unicode."),
+    }
+}
+
+fn fetch_addr() -> Result<SocketAddr, AddrParseError> {
+    let port = fetch_port();
+    match env::var("HOST") {
+        Ok(s) => format!("{}:{}", s, port).parse(),
+        Err(env::VarError::NotPresent) => {
+            let fallback_host = format!("[::1]:{}", port);
+            println!("$HOST is not set. Falling back to {}.", fallback_host);
+            fallback_host.parse()
+        }
+        Err(VarError::NotUnicode(_)) => panic!("$HOST should be written in Unicode."),
+    }
 }
 
 async fn nearby(Query(params): Query<Params>) -> String {
